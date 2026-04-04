@@ -1,0 +1,11 @@
+function [Fe, Fw, Fn, Fs] = computeFaceFlux(rho, u, v, Se, Sw, Sn, Ss, Nx, Ny)
+% Computes convective face fluxes F_f = rho*v* S_f
+% rho: density (scalar or Nx x Ny array), 
+% u, v: velocity components (scalar or Nx x Ny arrays)
+
+    Fe = rho .* (u .* Se(:,:,1) + v .* Se(:,:,2));
+    Fw = rho .* (u .* Sw(:,:,1) + v .* Sw(:,:,2));
+    Fn = rho .* (u .* Sn(:,:,1) + v .* Sn(:,:,2));
+    Fs = rho .* (u .* Ss(:,:,1) + v .* Ss(:,:,2));
+
+end
