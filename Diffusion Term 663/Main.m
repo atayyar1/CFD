@@ -34,18 +34,18 @@ solver.tol = 1e-10;
 bc.west.type = 'dirichlet';
 bc.west.value = 400.0;
 
+
 % choose for the east
-bc.east.type = 'robin';
-bc.east.h = 15.0;
-bc.east.Tinf = 300.0;
+bc.east.type = 'dirichlet';
+bc.east.value = 400.0;
 
 % choose for the south
 bc.south.type = 'dirichlet';
-bc.south.value = 320.0;
+bc.south.value = 400;
 
 % choose for the north
-bc.north.type = 'neumann';
-bc.north.value = 0.0;
+bc.north.type = 'dirichlet';
+bc.north.value = 400;
 
 for meshIdx = 1:numMeshes
     m = meshSizes(meshIdx,1);

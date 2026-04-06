@@ -1,49 +1,37 @@
 clc
 clear
-close all
-
-%% grid size
-m =10; n = 10;
-Nx = m-1; Ny = n-1;
-
-%% velocity field - uniform flow, change u and v here if needed
-% for 45 degrees: u = 1/sqrt(2), v = 1/sqrt(2)
-% for horizontal: u = 1, v = 0 etc
-u = 5/sqrt(2);
-v = 5/sqrt(2);
-rho = 1;
-
-%% solver settings
-maxOuterIter = 500;
-outerTol = 1e-8;
-
-% inner linear solver
-solver.type = 'gauss-seidel';
+close all 
+m =20; n =20;
+Nx = m-1; Ny = n-1; 
+u = 10/sqrt(2);
+v = 10/sqrt(2);
+rho = 1; 
+maxOuterIter = 200;
+outerTol = 1e-8; 
+solver.type = 'TDMA';
 solver.maxIter = 5000;
-solver.tol = 1e-10;
-
-% SMART outer iterations
-maxSMARTIter = 100;
-
-%% settings (same as assignment 1)
-IntFactor = "volume";
+solver.tol = 1e-10; 
+  IntFactor = "volume";
 Decomp_method = "minimum";
 
-%% boundary conditions (same as assignment 1)
+%% Boundary conditions
+% choose for the west
 bc.west.type = 'dirichlet';
 bc.west.value = 400.0;
 
-bc.east.type = 'robin';
-bc.east.h = 15.0;
-bc.east.Tinf = 300.0;
+% choose for the east
+bc.east.type = 'convective';
+bc.east.value = 0.0;
 
+% choose for the south
 bc.south.type = 'dirichlet';
 bc.south.value = 320.0;
 
+% choose for the north
 bc.north.type = 'neumann';
 bc.north.value = 0.0;
 
-%% initial guess
+
 T = 350*ones(Nx,Ny);
 
 %% grid and geometry
@@ -56,11 +44,8 @@ Vc = getCellVolumes(X,Y);
 [ge,gw,gn,gs] = getInterpolationFactors(Nx,Ny,Vc,CE,CW,CN,CS,IntFactor);
 [Ee,Ew,En,Es,Tev,Twv,Tnv,Tsv] = decomposeSurfaceVectors(Se,Sw,Sn,Ss,CE,CW,CN,CS,Nx,Ny,Decomp_method);
 
-% face fluxes are constant for uniform flow, compute once
 [Fe,Fw,Fn,Fs] = computeFaceFlux(rho,u,v,Se,Sw,Sn,Ss,Nx,Ny);
 
-%% ---- UPWIND SOLVE ----
-% nonlinear outer loop (for Gamma and S dependence on T)
 upwind_err_hist = [];
 for outerIter = 1:maxOuterIter
     Told = T;
@@ -68,6 +53,7 @@ for outerIter = 1:maxOuterIter
     % material properties
     [Gamma,S] = computeMaterialProperties(XC,YC,T,Nx,Ny);
 
+ 
     % gamma and temperature to faces
     [Gamma_e,Gamma_w,Gamma_n,Gamma_s] = interpolateGammaToFaces(Gamma,ge,gw,gn,gs,Nx,Ny);
     [Te,Tw,Tn,Ts] = interpolateTemperatureToFaces(T,ge,gw,gn,gs,Nx,Ny);
@@ -87,8 +73,8 @@ for outerIter = 1:maxOuterIter
     [aE,aW,aN,aS,aC] = assembleConvectionUpwind(aE,aW,aN,aS,aC,Fe,Fw,Fn,Fs,Nx,Ny);
 
     % boundary conditions (diffusion BCs, no convective here)
-    [aE,aW,aN,aS,aC,bC] = applyBoundaryConditions(aE,aW,aN,aS,aC,bC,Gamma,...
-        XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Se,Sw,Sn,Ss,Nx,Ny,bc);
+        [aE,aW,aN,aS,aC,bC]=applyBoundaryConditions(aE,aW,aN,aS,aC,bC,Gamma,...
+    XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Se,Sw,Sn,Ss,Nx,Ny,bc,Fe,Fw,Fn,Fs);
 
     % solve
     T = solveLinearSystem(aE,aW,aN,aS,aC,bC,Nx,Ny,T,solver);
@@ -105,7 +91,6 @@ end
 
 T_upwind = T;
 
-%% ---- SMART SOLVE ----
 % start from upwind solution
 T = 350*ones(Nx,Ny);
 
@@ -132,10 +117,8 @@ for smartIter = 1:maxOuterIter
     [aE,aW,aN,aS,aC,bC] = computeDiffusionCoefficients(Gamma_e,Gamma_w,Gamma_n,Gamma_s,...
         Ee,Ew,En,Es,CE,CW,CN,CS,S,Vc,bCorr,Nx,Ny);
     [aE,aW,aN,aS,aC] = assembleConvectionUpwind(aE,aW,aN,aS,aC,Fe,Fw,Fn,Fs,Nx,Ny);
-    [aE,aW,aN,aS,aC,bC] = applyBoundaryConditions(aE,aW,aN,aS,aC,bC,Gamma,...
-        XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Se,Sw,Sn,Ss,Nx,Ny,bc);
-
-    % SMART deferred correction using current gradients
+    [aE,aW,aN,aS,aC,bC]=applyBoundaryConditions(aE,aW,aN,aS,aC,bC,Gamma,...
+    XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Se,Sw,Sn,Ss,Nx,Ny,bc,Fe,Fw,Fn,Fs);
     bDC = computeSMARTCorrection(T,Fe,Fw,Fn,Fs,dTdx,dTdy,...
         XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Nx,Ny);
     bC = bC + bDC;
@@ -159,14 +142,14 @@ T_SMART = T;
 figure
 contourf(XC, YC, T_upwind, 20, 'LineColor', 'none')
 colorbar
-colormap(jet)          % change color scheme here\
+colormap(turbo)          % change color scheme here\
 title('T - upwind scheme (convection-diffusion)')
 xlabel('x'); ylabel('y')
 
 figure
 contourf(XC, YC, T_SMART, 20, 'LineColor', 'none')
 colorbar
-colormap(jet)          % change color scheme here
+colormap(turbo)          % change color scheme here
 title('T - SMART scheme (convection-diffusion)')
 xlabel('x'); ylabel('y')
 
@@ -174,7 +157,7 @@ xlabel('x'); ylabel('y')
 figure
 contourf(XC, YC, T_SMART - T_upwind, 20, 'LineColor', 'none')
 colorbar
-colormap(jet)          % change color scheme here
+colormap(turbo)          % change color scheme here
 title('T SMART - T upwind (difference)')
 xlabel('x'); ylabel('y')
 
@@ -186,3 +169,44 @@ semilogy(smart_err_hist, 'g-s', 'DisplayName', 'SMART')
 xlabel('iteration'); ylabel('max dT')
 title('convergence history')
 legend; grid on
+%% Cross-section on non-uniform grid
+% Choose target x-location
+x_target = 1.0;
+
+% Find the column whose centroid x-values are closest to x_target
+[~, ic] = min(abs(XC(:, round(Ny/2)) - x_target));
+
+% Extract data along that column
+y_cut = YC(ic, :);
+T_up_cut = T_upwind(ic, :);
+T_sm_cut = T_SMART(ic, :);
+
+% Sort by y just in case
+[y_cut, idx] = sort(y_cut);
+T_up_cut = T_up_cut(idx);
+T_sm_cut = T_sm_cut(idx);
+
+% Plot
+figure('Color','w','Position',[200 200 700 500]);
+
+plot(y_cut, T_up_cut, '-o', ...
+    'LineWidth', 1.8, 'MarkerSize', 6, ...
+    'MarkerIndices', 1:2:length(y_cut), ...
+    'DisplayName', 'Upwind');
+hold on
+
+plot(y_cut, T_sm_cut, '-s', ...
+    'LineWidth', 1.8, 'MarkerSize', 6, ...
+    'MarkerIndices', 1:2:length(y_cut), ...
+    'DisplayName', 'SMART');
+
+xlabel('y','FontSize',12)
+ylabel('T','FontSize',12)
+title(sprintf('Vertical Cross-Section at x \\approx %.2f', XC(ic, round(Ny/2))), ...
+    'FontSize',13)
+legend('Location','best','FontSize',11)
+grid off
+box on
+set(gca,'FontSize',12,'LineWidth',1.0,'TickDir','out')
+
+exportgraphics(gcf,'nonuniform_cross_section.png','Resolution',300);

@@ -8,7 +8,7 @@ for i = 1:Nx
         % East face
         aE(i,j)=aE(i,j) - max(-Fe(i,j), 0);
         % West face
-        aW(i,j)=aW(i,j)-max(-Fw(i,j),0);
+        aW(i,j)=aW(i,j)- max(-Fw(i,j),0);
         % North face
         aN(i,j) = aN(i,j) - max(-Fn(i,j), 0);
         
