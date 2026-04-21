@@ -12,10 +12,10 @@ u= 1/sqrt(2);
 v= 1/sqrt(2);
 rho= 1;
 
-maxIter = 100;
-tol = 1e-3;
+maxIter = 1000;
+tol = 1e-6;
 solver.type = 'gauss-seidel';
-solver.maxIter = 50;
+solver.maxIter = 50
 solver.tol = 1e-10;
 
 % BCs
@@ -38,7 +38,7 @@ Vc = getCellVolumes(X,Y);
 [CE,CW,CN,CS] = getCFVectors(XC,YC,Nx,Ny);
 
 [ge,gw,gn,gs] = getInterpolationFactors(Nx,Ny,Vc,CE,CW,CN,CS,"volume");
-[Ee,Ew,En,Es,Tev,Twv,Tnv,Tsv] = decomposeSurfaceVectors(Se,Sw,Sn,Ss,CE,CW,CN,CS,Nx,Ny,"minimum");
+[Ee,Ew,En,Es,Tev,Twv,Tnv,Tsv] = decomposeSurfaceVectors(Se,Sw,Sn,Ss,CE,CW,CN,CS,Nx,Ny,"overrelaxed");
 [Fe,Fw,Fn,Fs] = computeFaceFlux(rho,u,v,Se,Sw,Sn,Ss,Nx,Ny);
 Gamma = zeros(Nx,Ny);
 S = zeros(Nx,Ny);
@@ -78,7 +78,7 @@ for iter = 1:maxIter
     % recompute gradients using current phi
     [Te,Tw,Tn,Ts] = interpolateTemperatureToFaces(phi,ge,gw,gn,gs,Nx,Ny);
     [Te,Tw,Tn,Ts] = applyBoundaryFaceTemperatures(Te,Tw,Tn,Ts,phi,Gamma,bc,...
-    XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Nx,Ny);
+    XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Nx,Ny,Fe,Fw,Fn,Fs);
     [dphidx,dphidy] = computeCellGradient(Te,Tw,Tn,Ts,Se,Sw,Sn,Ss,Vc,Nx,Ny);
     
     % same upwind matrix
@@ -91,12 +91,14 @@ for iter = 1:maxIter
     % add SMART correction to RHS
     bDC = computeSMARTCorrection(phi,Fe,Fw,Fn,Fs,dphidx,dphidy,...
         XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Nx,Ny);
-  bC = bC +1 * bDC;
+    bC = bC +bDC;
     
     fprintf('max bDC = %e, max phi change = %e\n', max(abs(bDC(:))), err);
     
-    phi = solveLinearSystem(aE,aW,aN,aS,aC,bC,Nx,Ny,phi,solver);
-    
+    smartURF = 0.5;
+    phi_solved = solveLinearSystem(aE,aW,aN,aS,aC,bC,Nx,Ny,phi,solver);
+    phi = smartURF*phi_solved + (1-smartURF)*phi_old;
+
     % inside SMART loop, replace:
 err = norm(phi(:)-phi_old(:))/norm(phi(:)); 
      smart_err_hist(end+1) = err;
@@ -107,7 +109,7 @@ end
 phi_SMART = phi;
 %% contour plots
 figure
-contourf(XC, YC, phi_upwind, 200, 'LineColor','none')
+contourf(XC, YC, phi_upwind, 20, 'LineColor','none')
 colorbar
 title('phi - upwind scheme')
 xlabel('x'); ylabel('y')

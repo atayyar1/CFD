@@ -14,35 +14,32 @@ solver.tol = 1e-10;
   IntFactor = "volume";
 Decomp_method = "minimum";
 
-%% Boundary conditions
+%% BCs
 % choose for the west
 bc.west.type = 'dirichlet';
 bc.west.value = 400.0;
-
 % choose for the east
 bc.east.type = 'convective';
 bc.east.value = 0.0;
-
 % choose for the south
 bc.south.type = 'dirichlet';
 bc.south.value = 320.0;
-
 % choose for the north
 bc.north.type = 'neumann';
 bc.north.value = 0.0;
 
-
+%Initial conditions
 T = 350*ones(Nx,Ny);
 
 %% grid and geometry
 [X,Y] = Grid(m,n);
 [XC,YC] = getCentroids(X,Y);
 Vc = getCellVolumes(X,Y);
-[Se,Sw,Sn,Ss] = getSurfaceVectors(X,Y,Nx,Ny);
-[Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys] = getFaceCenters(X,Y,Nx,Ny);
-[CE,CW,CN,CS] = getCFVectors(XC,YC,Nx,Ny);
-[ge,gw,gn,gs] = getInterpolationFactors(Nx,Ny,Vc,CE,CW,CN,CS,IntFactor);
-[Ee,Ew,En,Es,Tev,Twv,Tnv,Tsv] = decomposeSurfaceVectors(Se,Sw,Sn,Ss,CE,CW,CN,CS,Nx,Ny,Decomp_method);
+[Se,Sw,Sn,Ss]=getSurfaceVectors(X,Y,Nx,Ny);
+[Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys]=getFaceCenters(X,Y,Nx,Ny);
+[CE,CW,CN,CS]=getCFVectors(XC,YC,Nx,Ny);
+[ge,gw,gn,gs]=getInterpolationFactors(Nx,Ny,Vc,CE,CW,CN,CS,IntFactor);
+[Ee,Ew,En,Es,Tev,Twv,Tnv,Tsv]=decomposeSurfaceVectors(Se,Sw,Sn,Ss,CE,CW,CN,CS,Nx,Ny,Decomp_method);
 
 [Fe,Fw,Fn,Fs] = computeFaceFlux(rho,u,v,Se,Sw,Sn,Ss,Nx,Ny);
 
@@ -51,7 +48,7 @@ for outerIter = 1:maxOuterIter
     Told = T;
 
     % material properties
-    [Gamma,S] = computeMaterialProperties(XC,YC,T,Nx,Ny);
+    [Gamma,S]=computeMaterialProperties(XC,YC,T,Nx,Ny);
 
  
     % gamma and temperature to faces
@@ -106,7 +103,7 @@ for smartIter = 1:maxOuterIter
     % face temperatures and gradients for SMART
     [Te,Tw,Tn,Ts] = interpolateTemperatureToFaces(T,ge,gw,gn,gs,Nx,Ny);
     [Te,Tw,Tn,Ts] = applyBoundaryFaceTemperatures(Te,Tw,Tn,Ts,T,Gamma,bc,...
-        XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Nx,Ny);
+        XC,YC,Xe,Ye,Xw,Yw,Xn,Yn,Xs,Ys,Nx,Ny,Fe,Fw,Fn,Fs);
     [dTdx,dTdy] = computeCellGradient(Te,Tw,Tn,Ts,Se,Sw,Sn,Ss,Vc,Nx,Ny);
 
     % non-orthogonal correction
@@ -124,7 +121,9 @@ for smartIter = 1:maxOuterIter
     bC = bC + bDC;
 
     % solve
-    T = solveLinearSystem(aE,aW,aN,aS,aC,bC,Nx,Ny,T,solver);
+    smartURF = 0.5;
+    T_solved = solveLinearSystem(aE,aW,aN,aS,aC,bC,Nx,Ny,T,solver);
+    T = smartURF*T_solved + (1-smartURF)*T;
 
     outerErr = max(abs(T(:) - Told(:)));
     smart_err_hist(end+1) = outerErr;
@@ -138,13 +137,18 @@ end
 
 T_SMART = T;
 
-%% ---- PLOTS ----
+
+%% PLEASE NOTE THAT I USED AN LLM TO HELP ME PLOT
+
+
+%%---- PLOTS ----
 figure
 contourf(XC, YC, T_upwind, 20, 'LineColor', 'none')
 colorbar
 colormap(turbo)          % change color scheme here\
 title('T - upwind scheme (convection-diffusion)')
 xlabel('x'); ylabel('y')
+exportgraphics(gcf,'upwind_nonuniform.png','Resolution',300);
 
 figure
 contourf(XC, YC, T_SMART, 20, 'LineColor', 'none')
@@ -152,6 +156,7 @@ colorbar
 colormap(turbo)          % change color scheme here
 title('T - SMART scheme (convection-diffusion)')
 xlabel('x'); ylabel('y')
+exportgraphics(gcf,'smart_nonuniform.png','Resolution',300);
 
 % difference between the two
 figure
@@ -160,7 +165,7 @@ colorbar
 colormap(turbo)          % change color scheme here
 title('T SMART - T upwind (difference)')
 xlabel('x'); ylabel('y')
-
+exportgraphics(gcf,'difference_nonuniform.png','Resolution',300);
 % convergence history
 figure
 semilogy(upwind_err_hist, 'b-o', 'DisplayName', 'Upwind')
@@ -169,44 +174,5 @@ semilogy(smart_err_hist, 'g-s', 'DisplayName', 'SMART')
 xlabel('iteration'); ylabel('max dT')
 title('convergence history')
 legend; grid on
-%% Cross-section on non-uniform grid
-% Choose target x-location
-x_target = 1.0;
-
-% Find the column whose centroid x-values are closest to x_target
-[~, ic] = min(abs(XC(:, round(Ny/2)) - x_target));
-
-% Extract data along that column
-y_cut = YC(ic, :);
-T_up_cut = T_upwind(ic, :);
-T_sm_cut = T_SMART(ic, :);
-
-% Sort by y just in case
-[y_cut, idx] = sort(y_cut);
-T_up_cut = T_up_cut(idx);
-T_sm_cut = T_sm_cut(idx);
-
-% Plot
-figure('Color','w','Position',[200 200 700 500]);
-
-plot(y_cut, T_up_cut, '-o', ...
-    'LineWidth', 1.8, 'MarkerSize', 6, ...
-    'MarkerIndices', 1:2:length(y_cut), ...
-    'DisplayName', 'Upwind');
-hold on
-
-plot(y_cut, T_sm_cut, '-s', ...
-    'LineWidth', 1.8, 'MarkerSize', 6, ...
-    'MarkerIndices', 1:2:length(y_cut), ...
-    'DisplayName', 'SMART');
-
-xlabel('y','FontSize',12)
-ylabel('T','FontSize',12)
-title(sprintf('Vertical Cross-Section at x \\approx %.2f', XC(ic, round(Ny/2))), ...
-    'FontSize',13)
-legend('Location','best','FontSize',11)
-grid off
-box on
-set(gca,'FontSize',12,'LineWidth',1.0,'TickDir','out')
-
-exportgraphics(gcf,'nonuniform_cross_section.png','Resolution',300);
+exportgraphics(gcf,'convergence_nonuniform.png','Resolution',300);
+ 
