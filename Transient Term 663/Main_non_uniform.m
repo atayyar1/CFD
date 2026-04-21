@@ -11,10 +11,10 @@ v = 10/sqrt(2);
 rho    = 1;
 cp     = 500;
 dt     = 1;
-t_end  = 200;
+t_end  = 120;
 Nsteps = t_end/dt;
 
-save_times = [10 30 200];
+save_times = [10 30 60];
 
 solver.type    = 'TDMA';
 solver.maxIter = 5000;

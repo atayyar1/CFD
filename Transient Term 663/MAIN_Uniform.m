@@ -126,7 +126,7 @@ T_be = solveLinearSystem(aE,aW,aN,aS,aC,bC,Nx,Ny,T_be_prev,solver);
 
     % update previous BE level for next step
     T_be_prev = T_be;
-
+1
     % save at required times
     for kk = 1:length(save_times)
         if t == save_times(kk)
