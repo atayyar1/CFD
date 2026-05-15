@@ -39,7 +39,7 @@ solver.tol     = 1e-8;
 Decomp_method = "minimum";
 
  %  GRID LOOP
- grid_configs = [40 20];
+ grid_configs = [80 40];
 results = struct();
 
 for g = 1:size(grid_configs,1)
